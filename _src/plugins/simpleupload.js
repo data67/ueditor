@@ -110,9 +110,46 @@ UE.plugin.register('simpleupload', function (){
                     return;
                 }
 
-                domUtils.on(iframe, 'load', callback);
-                form.action = utils.formatUrl(imageActionUrl + (imageActionUrl.indexOf('?') == -1 ? '?':'&') + params);
-                form.submit();
+                // iframe上传会有跨域问题。参看http://fex.baidu.com/ueditor/#dev-crossdomain的表单上传请求部分
+                // 可百度搜索：ueditor 单图上传 跨域
+                // domUtils.on(iframe, 'load', callback);
+                // form.action = utils.formatUrl(imageActionUrl + (imageActionUrl.indexOf('?') == -1 ? '?':'&') + params);
+                // form.submit();
+
+                /* 创建Ajax并提交 */
+                var xhr = new XMLHttpRequest(),
+                  fd = new FormData(),
+                  url = utils.formatUrl(imageActionUrl + (imageActionUrl.indexOf('?') == -1 ? '?':'&') + params);
+                var file = input.files[0];
+                fd.append(
+                  me.options.imageFieldName,
+                  file,
+                  file.name || "blob." + file.type.substr("image/".length)
+                );
+                fd.append("type", "ajax");
+                xhr.open("post", url, true);
+                xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+                xhr.addEventListener("load", function(e) {
+                  try {
+                    var link, json, loader;
+                    json = new Function("return " + utils.trim(e.target.response))();
+                    link = me.options.imageUrlPrefix + json.url;
+                    if (json.state == "SUCCESS" && json.url) {
+                      loader = me.document.getElementById(loadingId);
+                      domUtils.removeClasses(loader, "loadingclass");
+                      loader.setAttribute("src", link);
+                      loader.setAttribute("_src", link);
+                      loader.setAttribute("alt", json.original || "");
+                      loader.removeAttribute("id");
+                      me.fireEvent("contentchange");
+                    } else {
+                      showErrorLoader && showErrorLoader(json.state);
+                    }
+                  } catch (er) {
+                    showErrorLoader && showErrorLoader(me.getLang("simpleupload.loadError"));
+                  }
+                });
+                xhr.send(fd);
             });
 
             var stateTimer;
